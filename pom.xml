@@ -191,6 +191,17 @@
 
         <finalName>${project.name}-${project.version}</finalName>
 
+        <resources>
+            <!-- Include other files as resources files. -->
+            <resource>
+                <directory>src/main/resources</directory>
+                <filtering>false</filtering>
+                <excludes>
+                    <exclude>application.yaml</exclude>
+                </excludes>
+            </resource>
+        </resources>
+
         <pluginManagement>
             <plugins>
                 <plugin>
