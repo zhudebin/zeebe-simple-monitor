@@ -1,12 +1,15 @@
 package io.zeebe.monitor.entity;
 
+import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
 
 @Entity
 public final class HazelcastConfig {
 
-  @Id private String id;
+  @Id
+  @Column(length = 200)
+  private String id;
   private long sequence;
 
   public String getId() {

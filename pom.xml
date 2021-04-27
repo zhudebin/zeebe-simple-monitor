@@ -22,6 +22,7 @@
         <version.zeebe.spring>0.26.2</version.zeebe.spring>
 
         <spring.boot.version>2.4.2</spring.boot.version>
+        <mysql.version>5.1.29</mysql.version>
         <hazelcast.exporter.version>0.10.0</hazelcast.exporter.version>
         <!-- pin Hazelcast version because of spring-boot-dependencies -->
         <version.hazelcast>4.1.1</version.hazelcast>
@@ -113,6 +114,12 @@
         </dependency>
 
         <dependency>
+            <groupId>mysql</groupId>
+            <artifactId>mysql-connector-java</artifactId>
+            <version>${mysql.version}</version>
+        </dependency>
+
+        <dependency>
             <groupId>io.zeebe.hazelcast</groupId>
             <artifactId>zeebe-hazelcast-connector</artifactId>
         </dependency>
@@ -147,6 +154,10 @@
             <groupId>org.webjars</groupId>
             <artifactId>bootstrap</artifactId>
             <version>4.6.0</version>
+        </dependency>
+        <dependency>
+            <groupId>org.hibernate</groupId>
+            <artifactId>hibernate-core</artifactId>
         </dependency>
         <dependency>
             <groupId>org.webjars</groupId>
@@ -190,17 +201,6 @@
     <build>
 
         <finalName>${project.name}-${project.version}</finalName>
-
-        <resources>
-            <!-- Include other files as resources files. -->
-            <resource>
-                <directory>src/main/resources</directory>
-                <filtering>false</filtering>
-                <excludes>
-                    <exclude>application.yaml</exclude>
-                </excludes>
-            </resource>
-        </resources>
 
         <pluginManagement>
             <plugins>
@@ -290,6 +290,21 @@
     </build>
 
     <profiles>
+        <profile>
+            <id>build</id>
+            <build>
+                <resources>
+                    <!-- Include other files as resources files. -->
+                    <resource>
+                        <directory>src/main/resources</directory>
+                        <filtering>false</filtering>
+                        <excludes>
+                            <exclude>application.yaml</exclude>
+                        </excludes>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
         <profile>
             <id>release</id>
             <properties>
