@@ -29,6 +29,8 @@ import io.zeebe.monitor.repository.VariableRepository;
 import io.zeebe.monitor.repository.WorkflowInstanceRepository;
 import io.zeebe.monitor.repository.WorkflowRepository;
 import io.zeebe.protocol.record.value.BpmnElementType;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import org.camunda.bpm.model.xml.instance.ModelElementInstance;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
@@ -220,13 +222,18 @@ public class ViewController {
     final boolean isEnded = instance.getEnd() != null && instance.getEnd() > 0;
     dto.setState(instance.getState());
 
-    dto.setStartTime(Instant.ofEpochMilli(instance.getStart()).toString());
+    dto.setStartTime(formatMs(instance.getStart()));
 
     if (isEnded) {
-      dto.setEndTime(Instant.ofEpochMilli(instance.getEnd()).toString());
+      dto.setEndTime(formatMs(instance.getEnd()));
     }
 
     return dto;
+  }
+
+  private String formatMs(long start) {
+    return Instant.ofEpochMilli(start).atZone(ZoneId.systemDefault())
+                .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
   }
 
   @GetMapping("/views/instances")
@@ -293,10 +300,10 @@ public class ViewController {
     dto.setState(instance.getState());
     dto.setRunning(!isEnded);
 
-    dto.setStartTime(Instant.ofEpochMilli(instance.getStart()).toString());
+    dto.setStartTime(formatMs(instance.getStart()));
 
     if (isEnded) {
-      dto.setEndTime(Instant.ofEpochMilli(instance.getEnd()).toString());
+      dto.setEndTime(formatMs(instance.getEnd()));
     }
 
     if (instance.getParentElementInstanceKey() > 0) {
@@ -398,7 +405,7 @@ public class ViewController {
                   entry.setElementName(flowElements.getOrDefault(e.getElementId(), ""));
                   entry.setBpmnElementType(e.getBpmnElementType());
                   entry.setState(e.getIntent());
-                  entry.setTimestamp(Instant.ofEpochMilli(e.getTimestamp()).toString());
+                  entry.setTimestamp(formatMs(e.getTimestamp()));
 
                   return entry;
                 })
@@ -438,10 +445,10 @@ public class ViewController {
                   final boolean isResolved = i.getResolved() != null && i.getResolved() > 0;
                   incidentDto.setResolved(isResolved);
 
-                  incidentDto.setCreatedTime(Instant.ofEpochMilli(i.getCreated()).toString());
+                  incidentDto.setCreatedTime(formatMs(i.getCreated()));
 
                   if (isResolved) {
-                    incidentDto.setResolvedTime(Instant.ofEpochMilli(i.getResolved()).toString());
+                    incidentDto.setResolvedTime(formatMs(i.getResolved()));
 
                     incidentDto.setState("Resolved");
                   } else {
@@ -480,7 +487,7 @@ public class ViewController {
 
           final VariableEntity lastUpdate = variables.get(variables.size() - 1);
           variableDto.setValue(lastUpdate.getValue());
-          variableDto.setTimestamp(Instant.ofEpochMilli(lastUpdate.getTimestamp()).toString());
+          variableDto.setTimestamp(formatMs(lastUpdate.getTimestamp()));
 
           final List<VariableUpdateEntry> varUpdates =
               variables.stream()
@@ -488,7 +495,7 @@ public class ViewController {
                       v -> {
                         final VariableUpdateEntry varUpdate = new VariableUpdateEntry();
                         varUpdate.setValue(v.getValue());
-                        varUpdate.setTimestamp(Instant.ofEpochMilli(v.getTimestamp()).toString());
+                        varUpdate.setTimestamp(formatMs(v.getTimestamp()));
                         return varUpdate;
                       })
                   .collect(Collectors.toList());
@@ -684,10 +691,10 @@ public class ViewController {
 
     final boolean isResolved = incident.getResolved() != null && incident.getResolved() > 0;
 
-    dto.setCreatedTime(Instant.ofEpochMilli(incident.getCreated()).toString());
+    dto.setCreatedTime(formatMs(incident.getCreated()));
 
     if (isResolved) {
-      dto.setResolvedTime(Instant.ofEpochMilli(incident.getResolved()).toString());
+      dto.setResolvedTime(formatMs(incident.getResolved()));
 
       dto.setState("Resolved");
     } else {
@@ -727,7 +734,7 @@ public class ViewController {
     dto.setState(job.getState());
     dto.setRetries(job.getRetries());
     Optional.ofNullable(job.getWorker()).ifPresent(dto::setWorker);
-    dto.setTimestamp(Instant.ofEpochMilli(job.getTimestamp()).toString());
+    dto.setTimestamp(formatMs(job.getTimestamp()));
 
     return dto;
   }
@@ -761,7 +768,7 @@ public class ViewController {
     dto.setMessageId(message.getMessageId());
     dto.setPayload(message.getPayload());
     dto.setState(message.getState());
-    dto.setTimestamp(Instant.ofEpochMilli(message.getTimestamp()).toString());
+    dto.setTimestamp(formatMs(message.getTimestamp()));
 
     return dto;
   }
@@ -779,7 +786,7 @@ public class ViewController {
     dto.setElementId(subscription.getTargetFlowNodeId());
 
     dto.setState(subscription.getState());
-    dto.setTimestamp(Instant.ofEpochMilli(subscription.getTimestamp()).toString());
+    dto.setTimestamp(formatMs(subscription.getTimestamp()));
 
     dto.setOpen(subscription.getState().equals("opened"));
 
@@ -791,8 +798,8 @@ public class ViewController {
 
     dto.setElementId(timer.getTargetFlowNodeId());
     dto.setState(timer.getState());
-    dto.setDueDate(Instant.ofEpochMilli(timer.getDueDate()).toString());
-    dto.setTimestamp(Instant.ofEpochMilli(timer.getTimestamp()).toString());
+    dto.setDueDate(formatMs(timer.getDueDate()));
+    dto.setTimestamp(formatMs(timer.getTimestamp()));
     dto.setElementInstanceKey(timer.getElementInstanceKey());
 
     final int repetitions = timer.getRepetitions();
