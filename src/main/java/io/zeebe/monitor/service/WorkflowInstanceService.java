@@ -106,12 +106,19 @@ public class WorkflowInstanceService {
   @Autowired
   private VariableRepository variableRepository;
 
-  public WorkflowInstanceDto findInstanceDetailByKey(long key) {
+  public WorkflowInstanceDto findInstanceDetailByKeyNotExistThrowExp(long key) {
     final WorkflowInstanceEntity instance =
         workflowInstanceRepository
             .findByKey(key)
             .orElseThrow(() -> new RuntimeException("No workflow instance found with key: " + key));
     return toInstanceDto(instance);
+  }
+
+  public WorkflowInstanceDto findInstanceDetailByKey(long key) {
+    final WorkflowInstanceEntity instance =
+        workflowInstanceRepository
+            .findByKey(key).orElse(null);
+    return instance == null ? null : toInstanceDto(instance);
   }
 
   private WorkflowInstanceDto toInstanceDto(WorkflowInstanceEntity instance) {

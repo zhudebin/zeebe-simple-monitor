@@ -258,7 +258,8 @@ public class ViewController {
   @Transactional
   public String instanceDetail(
       @PathVariable long key, Map<String, Object> model, Pageable pageable) {
-    WorkflowInstanceDto instanceDto = workflowInstanceService.findInstanceDetailByKey(key);
+    WorkflowInstanceDto instanceDto = workflowInstanceService
+        .findInstanceDetailByKeyNotExistThrowExp(key);
 
     workflowRepository
         .findByKey(instanceDto.getWorkflowKey())

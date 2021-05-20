@@ -1,2 +1,2 @@
 #! /bin/bash
-docker build -t zeebe-simple-monitor:1.0 .
+docker build -t zeebe-simple-monitor:1.4 .

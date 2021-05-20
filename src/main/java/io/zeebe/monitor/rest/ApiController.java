@@ -19,7 +19,20 @@ public class ApiController {
   @GetMapping("/instances/{key}")
   @ResponseBody
   @Transactional
-  public WorkflowInstanceDto instanceDetail(@PathVariable long key) {
+  @Deprecated
+  public WorkflowInstanceDto instance(@PathVariable long key) {
     return workflowInstanceService.findInstanceDetailByKey(key);
+  }
+
+  @GetMapping("/instance/{key}")
+  @ResponseBody
+  @Transactional
+  public R instanceDetail(@PathVariable long key) {
+    WorkflowInstanceDto workflowInstanceDto = workflowInstanceService.findInstanceDetailByKey(key);
+    if (workflowInstanceDto == null) {
+      return R.error("No workflow instance found with key: " + key);
+    } else {
+      return R.ok().setData(workflowInstanceDto);
+    }
   }
 }

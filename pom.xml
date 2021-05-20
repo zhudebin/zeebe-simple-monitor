@@ -26,6 +26,7 @@
         <hazelcast.exporter.version>0.10.0</hazelcast.exporter.version>
         <!-- pin Hazelcast version because of spring-boot-dependencies -->
         <version.hazelcast>4.1.1</version.hazelcast>
+        <httpcore.version>4.4.14</httpcore.version>
 
         <!-- release parent settings -->
         <version.java>11</version.java>
@@ -128,6 +129,12 @@
             <groupId>com.hazelcast</groupId>
             <artifactId>hazelcast</artifactId>
             <version>${version.hazelcast}</version>
+        </dependency>
+
+        <dependency>
+            <groupId>org.apache.httpcomponents</groupId>
+            <artifactId>httpcore</artifactId>
+            <version>${httpcore.version}</version>
         </dependency>
 
         <dependency>
