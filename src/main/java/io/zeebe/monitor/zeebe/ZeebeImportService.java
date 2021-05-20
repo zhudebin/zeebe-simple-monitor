@@ -33,6 +33,7 @@ import io.zeebe.protocol.record.intent.MessageStartEventSubscriptionIntent;
 import io.zeebe.protocol.record.intent.MessageSubscriptionIntent;
 import io.zeebe.protocol.record.intent.TimerIntent;
 import io.zeebe.protocol.record.intent.WorkflowInstanceIntent;
+import java.util.Date;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -176,6 +177,7 @@ public class ZeebeImportService {
                   newEntity.setWorkflowKey(record.getWorkflowKey());
                   newEntity.setParentWorkflowInstanceKey(record.getParentWorkflowInstanceKey());
                   newEntity.setParentElementInstanceKey(record.getParentElementInstanceKey());
+                  newEntity.setCreateTime(new Date());
                   return newEntity;
                 });
 

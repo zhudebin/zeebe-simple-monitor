@@ -15,6 +15,7 @@
  */
 package io.zeebe.monitor.entity;
 
+import java.util.Date;
 import javax.persistence.Column;
 import javax.persistence.Entity;
 import javax.persistence.Id;
@@ -52,6 +53,8 @@ public class WorkflowInstanceEntity {
 
   @Column(name = "PARENT_ELEMENT_INSTANCE_KEY_")
   private Long parentElementInstanceKey;
+  @Column(name = "CREATE_TIME_")
+  private Date createTime;
 
   public long getKey() {
     return key;
@@ -139,5 +142,13 @@ public class WorkflowInstanceEntity {
 
   public void setParentElementInstanceKey(Long parentElementInstanceKey) {
     this.parentElementInstanceKey = parentElementInstanceKey;
+  }
+
+  public Date getCreateTime() {
+    return createTime;
+  }
+
+  public void setCreateTime(final Date createTime) {
+    this.createTime = createTime;
   }
 }
