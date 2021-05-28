@@ -25,7 +25,7 @@ import javax.persistence.Id;
 public class ZeebeWorkerDailyEntity {
 
   @Id
-  @GeneratedValue(strategy = GenerationType.AUTO)
+  @GeneratedValue(strategy = GenerationType.IDENTITY)
   @Column(name = "id_")
   private long id;
 
