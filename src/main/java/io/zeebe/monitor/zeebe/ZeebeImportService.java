@@ -1,5 +1,7 @@
 package io.zeebe.monitor.zeebe;
 
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
 import com.hazelcast.core.HazelcastInstance;
 import io.zeebe.exporter.proto.Schema;
 import io.zeebe.hazelcast.connect.java.ZeebeHazelcast;
@@ -13,6 +15,7 @@ import io.zeebe.monitor.entity.TimerEntity;
 import io.zeebe.monitor.entity.VariableEntity;
 import io.zeebe.monitor.entity.WorkflowEntity;
 import io.zeebe.monitor.entity.WorkflowInstanceEntity;
+import io.zeebe.monitor.entity.ZeebeWorkerDailyEntity;
 import io.zeebe.monitor.repository.ElementInstanceRepository;
 import io.zeebe.monitor.repository.HazelcastConfigRepository;
 import io.zeebe.monitor.repository.IncidentRepository;
@@ -23,6 +26,7 @@ import io.zeebe.monitor.repository.TimerRepository;
 import io.zeebe.monitor.repository.VariableRepository;
 import io.zeebe.monitor.repository.WorkflowInstanceRepository;
 import io.zeebe.monitor.repository.WorkflowRepository;
+import io.zeebe.monitor.repository.ZeebeWorkerDailyRepository;
 import io.zeebe.protocol.Protocol;
 import io.zeebe.protocol.record.intent.DeploymentIntent;
 import io.zeebe.protocol.record.intent.IncidentIntent;
@@ -33,30 +37,48 @@ import io.zeebe.protocol.record.intent.MessageStartEventSubscriptionIntent;
 import io.zeebe.protocol.record.intent.MessageSubscriptionIntent;
 import io.zeebe.protocol.record.intent.TimerIntent;
 import io.zeebe.protocol.record.intent.WorkflowInstanceIntent;
+import java.text.SimpleDateFormat;
 import java.util.Date;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
+import java.util.Optional;
 import java.util.UUID;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 @Component
 public class ZeebeImportService {
 
-  @Autowired private WorkflowRepository workflowRepository;
-  @Autowired private WorkflowInstanceRepository workflowInstanceRepository;
-  @Autowired private ElementInstanceRepository elementInstanceRepository;
-  @Autowired private VariableRepository variableRepository;
-  @Autowired private JobRepository jobRepository;
-  @Autowired private IncidentRepository incidentRepository;
-  @Autowired private MessageRepository messageRepository;
-  @Autowired private MessageSubscriptionRepository messageSubscriptionRepository;
-  @Autowired private TimerRepository timerRepository;
+  @Autowired
+  private WorkflowRepository workflowRepository;
+  @Autowired
+  private WorkflowInstanceRepository workflowInstanceRepository;
+  @Autowired
+  private ElementInstanceRepository elementInstanceRepository;
+  @Autowired
+  private VariableRepository variableRepository;
+  @Autowired
+  private JobRepository jobRepository;
+  @Autowired
+  private IncidentRepository incidentRepository;
+  @Autowired
+  private MessageRepository messageRepository;
+  @Autowired
+  private MessageSubscriptionRepository messageSubscriptionRepository;
+  @Autowired
+  private TimerRepository timerRepository;
+  @Autowired
+  private ZeebeWorkerDailyRepository zeebeWorkerDailyRepository;
 
-  @Autowired private ZeebeNotificationService notificationService;
+  @Autowired
+  private ZeebeNotificationService notificationService;
 
-  @Autowired private HazelcastConfigRepository hazelcastConfigRepository;
+  @Autowired
+  private HazelcastConfigRepository hazelcastConfigRepository;
+
+  private final Cache<String, Object> zeebeWorkerDailyCache = CacheBuilder.newBuilder().maximumSize(3000)
+      .expireAfterWrite(1, TimeUnit.HOURS).build();
 
   public ZeebeHazelcast importFrom(HazelcastInstance hazelcast) {
 
@@ -94,6 +116,8 @@ public class ZeebeImportService {
                 record -> withKey(record, Schema.MessageRecord::getMetadata, this::importMessage))
             .addMessageSubscriptionListener(this::importMessageSubscription)
             .addMessageStartEventSubscriptionListener(this::importMessageStartEventSubscription)
+            .addJobBatchListener(
+                record -> withKey(record, Schema.JobBatchRecord::getMetadata, this::importJobBatch))
             .postProcessListener(
                 sequence -> {
                   hazelcastConfig.setSequence(sequence);
@@ -397,6 +421,31 @@ public class ZeebeImportService {
     entity.setState(intent.name().toLowerCase());
     entity.setTimestamp(timestamp);
     timerRepository.save(entity);
+  }
+
+  private void importJobBatch(final Schema.JobBatchRecord record) {
+
+    final long timestamp = record.getMetadata().getTimestamp();
+    final String type = record.getType();
+    final String name = record.getWorker();
+    final String day = new SimpleDateFormat("yyyy-MM-dd").format(new Date());
+
+    String cacheKey = day + "," + type + "," + name;
+    if (zeebeWorkerDailyCache.getIfPresent(cacheKey) == null) {
+      Optional<ZeebeWorkerDailyEntity> optional = zeebeWorkerDailyRepository
+          .findByTypeAndNameAndDay(type, name, day);
+      if (!optional.isPresent()) {
+        // 记录jobType每天第一次拉取的记录
+        ZeebeWorkerDailyEntity zeebeWorkerDailyEntity = new ZeebeWorkerDailyEntity();
+        zeebeWorkerDailyEntity.setType(type);
+        zeebeWorkerDailyEntity.setName(name);
+        zeebeWorkerDailyEntity.setDay(day);
+        zeebeWorkerDailyEntity.setTimestamp(timestamp);
+        zeebeWorkerDailyRepository.save(zeebeWorkerDailyEntity);
+      }
+      zeebeWorkerDailyCache.put(cacheKey, new Object());
+    }
+
   }
 
   private void importVariable(final Schema.VariableRecord record) {
