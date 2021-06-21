@@ -1,6 +1,6 @@
 package io.zeebe.monitor.rest;
 
-import io.zeebe.monitor.service.WorkflowInstanceService;
+import io.zeebe.monitor.service.ProcessInstanceService;
 import javax.transaction.Transactional;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Controller;
@@ -14,25 +14,25 @@ import org.springframework.web.bind.annotation.ResponseBody;
 public class ApiController {
 
   @Autowired
-  private WorkflowInstanceService workflowInstanceService;
+  private ProcessInstanceService processInstanceService;
 
   @GetMapping("/instances/{key}")
   @ResponseBody
   @Transactional
   @Deprecated
-  public WorkflowInstanceDto instance(@PathVariable long key) {
-    return workflowInstanceService.findInstanceDetailByKey(key);
+  public ProcessInstanceDto instance(@PathVariable long key) {
+    return processInstanceService.findInstanceDetailByKey(key);
   }
 
   @GetMapping("/instance/{key}")
   @ResponseBody
   @Transactional
   public R instanceDetail(@PathVariable long key) {
-    WorkflowInstanceDto workflowInstanceDto = workflowInstanceService.findInstanceDetailByKey(key);
-    if (workflowInstanceDto == null) {
+    ProcessInstanceDto ProcessInstanceDto = processInstanceService.findInstanceDetailByKey(key);
+    if (ProcessInstanceDto == null) {
       return R.error("No workflow instance found with key: " + key);
     } else {
-      return R.ok().setData(workflowInstanceDto);
+      return R.ok().setData(ProcessInstanceDto);
     }
   }
 }

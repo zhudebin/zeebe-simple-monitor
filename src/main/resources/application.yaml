@@ -4,9 +4,6 @@ zeebe:
     security.plaintext: true
 
     worker:
-      hazelcast:
-        connection: localhost:5701
-        connectionTimeout: PT30S
       kafka:
         consumer:
           servers: "localhost:9092"
@@ -56,3 +53,4 @@ logging:
     io.zeebe: INFO
     io.zeebe.monitor: DEBUG
     com.hazelcast: WARN
+    org.apache.kafka: ERROR

@@ -1,46 +1,50 @@
 package io.zeebe.monitor.service;
 
-import io.zeebe.model.bpmn.Bpmn;
-import io.zeebe.model.bpmn.BpmnModelInstance;
-import io.zeebe.model.bpmn.instance.CatchEvent;
-import io.zeebe.model.bpmn.instance.ErrorEventDefinition;
-import io.zeebe.model.bpmn.instance.FlowElement;
-import io.zeebe.model.bpmn.instance.SequenceFlow;
-import io.zeebe.model.bpmn.instance.ServiceTask;
-import io.zeebe.model.bpmn.instance.TimerEventDefinition;
-import io.zeebe.model.bpmn.instance.zeebe.ZeebeTaskDefinition;
+import io.camunda.zeebe.model.bpmn.Bpmn;
+import io.camunda.zeebe.model.bpmn.BpmnModelInstance;
+import io.camunda.zeebe.model.bpmn.instance.CatchEvent;
+import io.camunda.zeebe.model.bpmn.instance.ErrorEventDefinition;
+import io.camunda.zeebe.model.bpmn.instance.FlowElement;
+import io.camunda.zeebe.model.bpmn.instance.SequenceFlow;
+import io.camunda.zeebe.model.bpmn.instance.ServiceTask;
+import io.camunda.zeebe.model.bpmn.instance.TimerEventDefinition;
+import io.camunda.zeebe.model.bpmn.instance.zeebe.ZeebeTaskDefinition;
+import io.camunda.zeebe.protocol.record.intent.MessageSubscriptionIntent;
+import io.camunda.zeebe.protocol.record.value.BpmnElementType;
 import io.zeebe.monitor.entity.ElementInstanceEntity;
+import io.zeebe.monitor.entity.ErrorEntity;
 import io.zeebe.monitor.entity.IncidentEntity;
 import io.zeebe.monitor.entity.JobEntity;
 import io.zeebe.monitor.entity.MessageEntity;
 import io.zeebe.monitor.entity.MessageSubscriptionEntity;
+import io.zeebe.monitor.entity.ProcessInstanceEntity;
 import io.zeebe.monitor.entity.TimerEntity;
 import io.zeebe.monitor.entity.VariableEntity;
-import io.zeebe.monitor.entity.WorkflowInstanceEntity;
 import io.zeebe.monitor.repository.ElementInstanceRepository;
+import io.zeebe.monitor.repository.ErrorRepository;
 import io.zeebe.monitor.repository.IncidentRepository;
 import io.zeebe.monitor.repository.JobRepository;
 import io.zeebe.monitor.repository.MessageRepository;
 import io.zeebe.monitor.repository.MessageSubscriptionRepository;
+import io.zeebe.monitor.repository.ProcessInstanceRepository;
+import io.zeebe.monitor.repository.ProcessRepository;
 import io.zeebe.monitor.repository.TimerRepository;
 import io.zeebe.monitor.repository.VariableRepository;
-import io.zeebe.monitor.repository.WorkflowInstanceRepository;
-import io.zeebe.monitor.repository.WorkflowRepository;
 import io.zeebe.monitor.rest.ActiveScope;
 import io.zeebe.monitor.rest.AuditLogEntry;
 import io.zeebe.monitor.rest.BpmnElementInfo;
-import io.zeebe.monitor.rest.CalledWorkflowInstanceDto;
+import io.zeebe.monitor.rest.CalledProcessInstanceDto;
 import io.zeebe.monitor.rest.ElementInstanceState;
+import io.zeebe.monitor.rest.ErrorDto;
 import io.zeebe.monitor.rest.IncidentDto;
 import io.zeebe.monitor.rest.IncidentListDto;
 import io.zeebe.monitor.rest.JobDto;
 import io.zeebe.monitor.rest.MessageDto;
 import io.zeebe.monitor.rest.MessageSubscriptionDto;
+import io.zeebe.monitor.rest.ProcessInstanceDto;
 import io.zeebe.monitor.rest.TimerDto;
 import io.zeebe.monitor.rest.VariableEntry;
 import io.zeebe.monitor.rest.VariableUpdateEntry;
-import io.zeebe.monitor.rest.WorkflowInstanceDto;
-import io.zeebe.protocol.record.value.BpmnElementType;
 import java.io.ByteArrayInputStream;
 import java.time.Instant;
 import java.time.ZoneId;
@@ -66,24 +70,22 @@ import org.springframework.stereotype.Service;
  * @since 2021/5/13 2:13 下午
  */
 @Service
-public class WorkflowInstanceService {
+public class ProcessInstanceService {
 
-  private static final List<String> WORKFLOW_INSTANCE_ENTERED_INTENTS =
+  private static final List<String> PROCESS_INSTANCE_ENTERED_INTENTS =
       Arrays.asList("ELEMENT_ACTIVATED");
-
-  private static final List<String> WORKFLOW_INSTANCE_COMPLETED_INTENTS =
+  private static final List<String> PROCESS_INSTANCE_COMPLETED_INTENTS =
       Arrays.asList("ELEMENT_COMPLETED", "ELEMENT_TERMINATED");
-
   private static final List<String> EXCLUDE_ELEMENT_TYPES =
       Arrays.asList(BpmnElementType.MULTI_INSTANCE_BODY.name());
-
   private static final List<String> JOB_COMPLETED_INTENTS = Arrays.asList("completed", "canceled");
 
-  @Autowired
-  private WorkflowRepository workflowRepository;
 
   @Autowired
-  private WorkflowInstanceRepository workflowInstanceRepository;
+  private ProcessRepository processRepository;
+
+  @Autowired
+  private ProcessInstanceRepository processInstanceRepository;
 
   @Autowired
   private ElementInstanceRepository activityInstanceRepository;
@@ -105,37 +107,39 @@ public class WorkflowInstanceService {
 
   @Autowired
   private VariableRepository variableRepository;
+  @Autowired
+  private ErrorRepository errorRepository;
 
-  public WorkflowInstanceDto findInstanceDetailByKeyNotExistThrowExp(long key) {
-    final WorkflowInstanceEntity instance =
-        workflowInstanceRepository
+  public ProcessInstanceDto findInstanceDetailByKeyNotExistThrowExp(long key) {
+    final ProcessInstanceEntity instance =
+        processInstanceRepository
             .findByKey(key)
             .orElseThrow(() -> new RuntimeException("No workflow instance found with key: " + key));
     return toInstanceDto(instance);
   }
 
-  public WorkflowInstanceDto findInstanceDetailByKey(long key) {
-    final WorkflowInstanceEntity instance =
-        workflowInstanceRepository
+  public ProcessInstanceDto findInstanceDetailByKey(long key) {
+    final ProcessInstanceEntity instance =
+        processInstanceRepository
             .findByKey(key).orElse(null);
     return instance == null ? null : toInstanceDto(instance);
   }
 
-  private WorkflowInstanceDto toInstanceDto(WorkflowInstanceEntity instance) {
+  public ProcessInstanceDto toInstanceDto(final ProcessInstanceEntity instance) {
     final List<ElementInstanceEntity> events =
         StreamSupport.stream(
             activityInstanceRepository
-                .findByWorkflowInstanceKey(instance.getKey())
+                .findByProcessInstanceKey(instance.getKey())
                 .spliterator(),
             false)
             .collect(Collectors.toList());
 
-    final WorkflowInstanceDto dto = new WorkflowInstanceDto();
-    dto.setWorkflowInstanceKey(instance.getKey());
+    final ProcessInstanceDto dto = new ProcessInstanceDto();
+    dto.setProcessInstanceKey(instance.getKey());
 
     dto.setPartitionId(instance.getPartitionId());
 
-    dto.setWorkflowKey(instance.getWorkflowKey());
+    dto.setProcessDefinitionKey(instance.getProcessDefinitionKey());
 
     dto.setBpmnProcessId(instance.getBpmnProcessId());
     dto.setVersion(instance.getVersion());
@@ -144,17 +148,17 @@ public class WorkflowInstanceService {
     dto.setState(instance.getState());
     dto.setRunning(!isEnded);
 
-    dto.setStartTime(formatMs(instance.getStart()));
+    dto.setStartTime(Instant.ofEpochMilli(instance.getStart()).toString());
 
     if (isEnded) {
-      dto.setEndTime(formatMs(instance.getEnd()));
+      dto.setEndTime(Instant.ofEpochMilli(instance.getEnd()).toString());
     }
 
     if (instance.getParentElementInstanceKey() > 0) {
-      dto.setParentWorkflowInstanceKey(instance.getParentWorkflowInstanceKey());
+      dto.setParentProcessInstanceKey(instance.getParentProcessInstanceKey());
 
-      workflowInstanceRepository
-          .findByKey(instance.getParentWorkflowInstanceKey())
+      processInstanceRepository
+          .findByKey(instance.getParentProcessInstanceKey())
           .ifPresent(
               parent -> {
                 dto.setParentBpmnProcessId(parent.getBpmnProcessId());
@@ -163,15 +167,15 @@ public class WorkflowInstanceService {
 
     final List<String> completedActivities =
         events.stream()
-            .filter(e -> WORKFLOW_INSTANCE_COMPLETED_INTENTS.contains(e.getIntent()))
-            .filter(e -> e.getBpmnElementType() != BpmnElementType.PROCESS.name())
+            .filter(e -> PROCESS_INSTANCE_COMPLETED_INTENTS.contains(e.getIntent()))
+            .filter(e -> !e.getBpmnElementType().equals(BpmnElementType.PROCESS.name()))
             .map(ElementInstanceEntity::getElementId)
             .collect(Collectors.toList());
 
     final List<String> activeActivities =
         events.stream()
-            .filter(e -> WORKFLOW_INSTANCE_ENTERED_INTENTS.contains(e.getIntent()))
-            .filter(e -> e.getBpmnElementType() != BpmnElementType.PROCESS.name())
+            .filter(e -> PROCESS_INSTANCE_ENTERED_INTENTS.contains(e.getIntent()))
+            .filter(e -> !e.getBpmnElementType().equals(BpmnElementType.PROCESS.name()))
             .map(ElementInstanceEntity::getElementId)
             .filter(id -> !completedActivities.contains(id))
             .collect(Collectors.toList());
@@ -186,14 +190,14 @@ public class WorkflowInstanceService {
 
     final Map<String, Long> completedElementsById =
         events.stream()
-            .filter(e -> WORKFLOW_INSTANCE_COMPLETED_INTENTS.contains(e.getIntent()))
+            .filter(e -> PROCESS_INSTANCE_COMPLETED_INTENTS.contains(e.getIntent()))
             .filter(e -> !EXCLUDE_ELEMENT_TYPES.contains(e.getBpmnElementType()))
             .collect(
                 Collectors.groupingBy(ElementInstanceEntity::getElementId, Collectors.counting()));
 
     final Map<String, Long> enteredElementsById =
         events.stream()
-            .filter(e -> WORKFLOW_INSTANCE_ENTERED_INTENTS.contains(e.getIntent()))
+            .filter(e -> PROCESS_INSTANCE_ENTERED_INTENTS.contains(e.getIntent()))
             .filter(e -> !EXCLUDE_ELEMENT_TYPES.contains(e.getBpmnElementType()))
             .collect(
                 Collectors.groupingBy(ElementInstanceEntity::getElementId, Collectors.counting()));
@@ -219,10 +223,10 @@ public class WorkflowInstanceService {
     dto.setElementInstances(elementStates);
 
     final var bpmnModelInstance =
-        workflowRepository
-            .findByKey(instance.getWorkflowKey())
+        processRepository
+            .findByKey(instance.getProcessDefinitionKey())
             .map(w -> new ByteArrayInputStream(w.getResource().getBytes()))
-            .map(stream -> Bpmn.readModelFromStream(stream));
+            .map(Bpmn::readModelFromStream);
 
     final Map<String, String> flowElements = new HashMap<>();
 
@@ -230,9 +234,7 @@ public class WorkflowInstanceService {
         bpmn -> {
           bpmn.getModelElementsByType(FlowElement.class)
               .forEach(
-                  e -> {
-                    flowElements.put(e.getId(), Optional.ofNullable(e.getName()).orElse(""));
-                  });
+                  e -> flowElements.put(e.getId(), Optional.ofNullable(e.getName()).orElse("")));
 
           dto.setBpmnElementInfos(getBpmnElementInfos(bpmn));
         });
@@ -249,7 +251,7 @@ public class WorkflowInstanceService {
                   entry.setElementName(flowElements.getOrDefault(e.getElementId(), ""));
                   entry.setBpmnElementType(e.getBpmnElementType());
                   entry.setState(e.getIntent());
-                  entry.setTimestamp(formatMs(e.getTimestamp()));
+                  entry.setTimestamp(Instant.ofEpochMilli(e.getTimestamp()).toString());
 
                   return entry;
                 })
@@ -259,8 +261,7 @@ public class WorkflowInstanceService {
 
     final List<IncidentEntity> incidents =
         StreamSupport.stream(
-            incidentRepository.findByWorkflowInstanceKey(instance.getKey()).spliterator(),
-            false)
+            incidentRepository.findByProcessInstanceKey(instance.getKey()).spliterator(), false)
             .collect(Collectors.toList());
 
     final Map<Long, String> elementIdsForKeys = new HashMap<>();
@@ -289,10 +290,10 @@ public class WorkflowInstanceService {
                   final boolean isResolved = i.getResolved() != null && i.getResolved() > 0;
                   incidentDto.setResolved(isResolved);
 
-                  incidentDto.setCreatedTime(formatMs(i.getCreated()));
+                  incidentDto.setCreatedTime(Instant.ofEpochMilli(i.getCreated()).toString());
 
                   if (isResolved) {
-                    incidentDto.setResolvedTime(formatMs(i.getResolved()));
+                    incidentDto.setResolvedTime(Instant.ofEpochMilli(i.getResolved()).toString());
 
                     incidentDto.setState("Resolved");
                   } else {
@@ -317,7 +318,7 @@ public class WorkflowInstanceService {
     dto.setActiveActivities(activeActivities);
 
     final Map<VariableTuple, List<VariableEntity>> variablesByScopeAndName =
-        variableRepository.findByWorkflowInstanceKey(instance.getKey()).stream()
+        variableRepository.findByProcessInstanceKey(instance.getKey()).stream()
             .collect(Collectors.groupingBy(v -> new VariableTuple(v.getScopeKey(), v.getName())));
     variablesByScopeAndName.forEach(
         (scopeKeyName, variables) -> {
@@ -331,7 +332,7 @@ public class WorkflowInstanceService {
 
           final VariableEntity lastUpdate = variables.get(variables.size() - 1);
           variableDto.setValue(lastUpdate.getValue());
-          variableDto.setTimestamp(formatMs(lastUpdate.getTimestamp()));
+          variableDto.setTimestamp(Instant.ofEpochMilli(lastUpdate.getTimestamp()).toString());
 
           final List<VariableUpdateEntry> varUpdates =
               variables.stream()
@@ -339,7 +340,7 @@ public class WorkflowInstanceService {
                       v -> {
                         final VariableUpdateEntry varUpdate = new VariableUpdateEntry();
                         varUpdate.setValue(v.getValue());
-                        varUpdate.setTimestamp(formatMs(v.getTimestamp()));
+                        varUpdate.setTimestamp(Instant.ofEpochMilli(v.getTimestamp()).toString());
                         return varUpdate;
                       })
                   .collect(Collectors.toList());
@@ -354,13 +355,13 @@ public class WorkflowInstanceService {
 
       final List<Long> completedElementInstances =
           events.stream()
-              .filter(e -> WORKFLOW_INSTANCE_COMPLETED_INTENTS.contains(e.getIntent()))
+              .filter(e -> PROCESS_INSTANCE_COMPLETED_INTENTS.contains(e.getIntent()))
               .map(ElementInstanceEntity::getKey)
               .collect(Collectors.toList());
 
       final List<ActiveScope> activeElementInstances =
           events.stream()
-              .filter(e -> WORKFLOW_INSTANCE_ENTERED_INTENTS.contains(e.getIntent()))
+              .filter(e -> PROCESS_INSTANCE_ENTERED_INTENTS.contains(e.getIntent()))
               .map(ElementInstanceEntity::getKey)
               .filter(id -> !completedElementInstances.contains(id))
               .map(scopeKey -> new ActiveScope(scopeKey, elementIdsForKeys.get(scopeKey)))
@@ -371,7 +372,7 @@ public class WorkflowInstanceService {
     dto.setActiveScopes(activeScopes);
 
     final List<JobDto> jobDtos =
-        jobRepository.findByWorkflowInstanceKey(instance.getKey()).stream()
+        jobRepository.findByProcessInstanceKey(instance.getKey()).stream()
             .map(
                 job -> {
                   final JobDto jobDto = toDto(job);
@@ -390,7 +391,7 @@ public class WorkflowInstanceService {
     dto.setJobs(jobDtos);
 
     final List<MessageSubscriptionDto> messageSubscriptions =
-        messageSubscriptionRepository.findByWorkflowInstanceKey(instance.getKey()).stream()
+        messageSubscriptionRepository.findByProcessInstanceKey(instance.getKey()).stream()
             .map(
                 subscription -> {
                   final MessageSubscriptionDto subscriptionDto = toDto(subscription);
@@ -403,18 +404,18 @@ public class WorkflowInstanceService {
     dto.setMessageSubscriptions(messageSubscriptions);
 
     final List<TimerDto> timers =
-        timerRepository.findByWorkflowInstanceKey(instance.getKey()).stream()
-            .map(timer -> toDto(timer))
+        timerRepository.findByProcessInstanceKey(instance.getKey()).stream()
+            .map(this::toDto)
             .collect(Collectors.toList());
     dto.setTimers(timers);
 
-    final var calledWorkflowInstances =
-        workflowInstanceRepository.findByParentWorkflowInstanceKey(instance.getKey()).stream()
+    final var calledProcessInstances =
+        processInstanceRepository.findByParentProcessInstanceKey(instance.getKey()).stream()
             .map(
                 childEntity -> {
-                  final var childDto = new CalledWorkflowInstanceDto();
+                  final var childDto = new CalledProcessInstanceDto();
 
-                  childDto.setChildWorkflowInstanceKey(childEntity.getKey());
+                  childDto.setChildProcessInstanceKey(childEntity.getKey());
                   childDto.setChildBpmnProcessId(childEntity.getBpmnProcessId());
                   childDto.setChildState(childEntity.getState());
 
@@ -427,93 +428,34 @@ public class WorkflowInstanceService {
                   return childDto;
                 })
             .collect(Collectors.toList());
-    dto.setCalledWorkflowInstances(calledWorkflowInstances);
+    dto.setCalledProcessInstances(calledProcessInstances);
+
+    final var errors =
+        errorRepository.findByProcessInstanceKey(instance.getKey()).stream()
+            .map(this::toDto)
+            .collect(Collectors.toList());
+    dto.setErrors(errors);
 
     return dto;
   }
 
-  private JobDto toDto(JobEntity job) {
-    final JobDto dto = new JobDto();
-
-    dto.setKey(job.getKey());
-    dto.setJobType(job.getJobType());
-    dto.setWorkflowInstanceKey(job.getWorkflowInstanceKey());
-    dto.setElementInstanceKey(job.getElementInstanceKey());
-    dto.setState(job.getState());
-    dto.setRetries(job.getRetries());
-    Optional.ofNullable(job.getWorker()).ifPresent(dto::setWorker);
-    dto.setTimestamp(formatMs(job.getTimestamp()));
-
-    return dto;
-  }
-
-  private MessageSubscriptionDto toDto(MessageSubscriptionEntity subscription) {
-    final MessageSubscriptionDto dto = new MessageSubscriptionDto();
-
-    dto.setKey(subscription.getId());
-    dto.setMessageName(subscription.getMessageName());
-    dto.setCorrelationKey(Optional.ofNullable(subscription.getCorrelationKey()).orElse(""));
-
-    dto.setWorkflowInstanceKey(subscription.getWorkflowInstanceKey());
-    dto.setElementInstanceKey(subscription.getElementInstanceKey());
-
-    dto.setElementId(subscription.getTargetFlowNodeId());
-
-    dto.setState(subscription.getState());
-    dto.setTimestamp(formatMs(subscription.getTimestamp()));
-
-    dto.setOpen(subscription.getState().equals("opened"));
-
-    return dto;
-  }
-
-  private TimerDto toDto(TimerEntity timer) {
-    final TimerDto dto = new TimerDto();
-
-    dto.setElementId(timer.getTargetFlowNodeId());
-    dto.setState(timer.getState());
-    dto.setDueDate(formatMs(timer.getDueDate()));
-    dto.setTimestamp(formatMs(timer.getTimestamp()));
-    dto.setElementInstanceKey(timer.getElementInstanceKey());
-
-    final int repetitions = timer.getRepetitions();
-    dto.setRepetitions(repetitions >= 0 ? String.valueOf(repetitions) : "∞");
-
-    return dto;
-  }
-
-  private MessageDto toDto(MessageEntity message) {
-    final MessageDto dto = new MessageDto();
-
-    dto.setKey(message.getKey());
-    dto.setName(message.getName());
-    dto.setCorrelationKey(message.getCorrelationKey());
-    dto.setMessageId(message.getMessageId());
-    dto.setPayload(message.getPayload());
-    dto.setState(message.getState());
-    dto.setTimestamp(formatMs(message.getTimestamp()));
-
-    return dto;
-  }
-
-  private IncidentListDto toDto(IncidentEntity incident) {
+  private IncidentListDto toDto(final IncidentEntity incident) {
     final IncidentListDto dto = new IncidentListDto();
     dto.setKey(incident.getKey());
 
     dto.setBpmnProcessId(incident.getBpmnProcessId());
-    dto.setWorkflowKey(incident.getWorkflowKey());
-    ;
-    dto.setWorkflowInstanceKey(incident.getWorkflowInstanceKey());
+    dto.setProcessDefinitionKey(incident.getProcessDefinitionKey());
+    dto.setProcessInstanceKey(incident.getProcessInstanceKey());
 
     dto.setErrorType(incident.getErrorType());
     dto.setErrorMessage(incident.getErrorMessage());
 
     final boolean isResolved = incident.getResolved() != null && incident.getResolved() > 0;
 
-    dto.setCreatedTime(formatMs(incident.getCreated()));
+    dto.setCreatedTime(Instant.ofEpochMilli(incident.getCreated()).toString());
 
     if (isResolved) {
-      dto.setResolvedTime(formatMs(incident.getResolved()));
+      dto.setResolvedTime(Instant.ofEpochMilli(incident.getResolved()).toString());
 
       dto.setState("Resolved");
     } else {
@@ -523,7 +465,87 @@ public class WorkflowInstanceService {
     return dto;
   }
 
-  private List<BpmnElementInfo> getBpmnElementInfos(BpmnModelInstance bpmn) {
+  private JobDto toDto(final JobEntity job) {
+    final JobDto dto = new JobDto();
+
+    dto.setKey(job.getKey());
+    dto.setJobType(job.getJobType());
+    dto.setProcessInstanceKey(job.getProcessInstanceKey());
+    dto.setElementInstanceKey(job.getElementInstanceKey());
+    dto.setState(job.getState());
+    dto.setRetries(job.getRetries());
+    Optional.ofNullable(job.getWorker()).ifPresent(dto::setWorker);
+    dto.setTimestamp(Instant.ofEpochMilli(job.getTimestamp()).toString());
+
+    return dto;
+  }
+
+  private MessageDto toDto(final MessageEntity message) {
+    final MessageDto dto = new MessageDto();
+
+    dto.setKey(message.getKey());
+    dto.setName(message.getName());
+    dto.setCorrelationKey(message.getCorrelationKey());
+    dto.setMessageId(message.getMessageId());
+    dto.setPayload(message.getPayload());
+    dto.setState(message.getState());
+    dto.setTimestamp(Instant.ofEpochMilli(message.getTimestamp()).toString());
+
+    return dto;
+  }
+
+  private MessageSubscriptionDto toDto(final MessageSubscriptionEntity subscription) {
+    final MessageSubscriptionDto dto = new MessageSubscriptionDto();
+
+    dto.setKey(subscription.getId());
+    dto.setMessageName(subscription.getMessageName());
+    dto.setCorrelationKey(Optional.ofNullable(subscription.getCorrelationKey()).orElse(""));
+
+    dto.setProcessInstanceKey(subscription.getProcessInstanceKey());
+    dto.setElementInstanceKey(subscription.getElementInstanceKey());
+
+    dto.setElementId(subscription.getTargetFlowNodeId());
+
+    dto.setState(subscription.getState());
+    dto.setTimestamp(Instant.ofEpochMilli(subscription.getTimestamp()).toString());
+
+    dto.setOpen(subscription.getState().equalsIgnoreCase(MessageSubscriptionIntent.CREATED.name()));
+
+    return dto;
+  }
+
+  private TimerDto toDto(final TimerEntity timer) {
+    final TimerDto dto = new TimerDto();
+
+    dto.setElementId(timer.getTargetElementId());
+    dto.setState(timer.getState());
+    dto.setDueDate(Instant.ofEpochMilli(timer.getDueDate()).toString());
+    dto.setTimestamp(Instant.ofEpochMilli(timer.getTimestamp()).toString());
+    dto.setElementInstanceKey(timer.getElementInstanceKey());
+
+    final int repetitions = timer.getRepetitions();
+    dto.setRepetitions(repetitions >= 0 ? String.valueOf(repetitions) : "∞");
+
+    return dto;
+  }
+
+  private ErrorDto toDto(final ErrorEntity entity) {
+    final var dto = new ErrorDto();
+    dto.setPosition(entity.getPosition());
+    dto.setErrorEventPosition(entity.getErrorEventPosition());
+    dto.setExceptionMessage(entity.getExceptionMessage());
+    dto.setStacktrace(entity.getStacktrace());
+    dto.setTimestamp(Instant.ofEpochMilli(entity.getTimestamp()).toString());
+
+    if (entity.getProcessInstanceKey() > 0) {
+      dto.setProcessInstanceKey(entity.getProcessInstanceKey());
+    }
+
+    return dto;
+  }
+
+
+  private List<BpmnElementInfo> getBpmnElementInfos(final BpmnModelInstance bpmn) {
     final List<BpmnElementInfo> infos = new ArrayList<>();
 
     bpmn.getModelElementsByType(ServiceTask.class)
@@ -596,25 +618,26 @@ public class WorkflowInstanceService {
         .format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
   }
 
+
   private static class VariableTuple {
 
     private final long scopeKey;
     private final String name;
 
-    VariableTuple(long scopeKey, String name) {
+    VariableTuple(final long scopeKey, final String name) {
       this.scopeKey = scopeKey;
       this.name = name;
     }
 
     @Override
-    public boolean equals(Object o) {
+    public boolean equals(final Object o) {
       if (this == o) {
         return true;
       }
       if (o == null || getClass() != o.getClass()) {
         return false;
       }
-      VariableTuple that = (VariableTuple) o;
+      final VariableTuple that = (VariableTuple) o;
       return scopeKey == that.scopeKey && Objects.equals(name, that.name);
     }
 
@@ -623,5 +646,4 @@ public class WorkflowInstanceService {
       return Objects.hash(scopeKey, name);
     }
   }
-
 }
