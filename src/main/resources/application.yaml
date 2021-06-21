@@ -1,6 +1,4 @@
 zeebe:
-
-
   client:
     broker.contactPoint: 127.0.0.1:26500
     security.plaintext: true
@@ -26,13 +24,14 @@ zeebe:
 spring:
 
   datasource:
-    url: jdbc:h2:mem:zeebe-monitor;DB_CLOSE_DELAY=-1
-    username: sa
-    password:
-    driverClassName: org.h2.Driver
+    url: jdbc:mysql://dev-alarm:17878/zeebe?useUnicode=true&characterEncoding=UTF-8&allowMultiQueries=true&zeroDateTimeBehavior=convertToNull
+    username: root
+    password: 111111
+    driverClassName: com.mysql.jdbc.Driver
+    initialization-mode: always
 
   jpa:
-    database-platform: org.hibernate.dialect.H2Dialect
+    database-platform: org.hibernate.dialect.MySQL5Dialect
     hibernate:
       ddl-auto: update
 
@@ -53,7 +52,7 @@ server:
 
 logging:
   level:
-    root: ERROR
+    root: DEBUG
     io.zeebe: INFO
     io.zeebe.monitor: DEBUG
     com.hazelcast: WARN

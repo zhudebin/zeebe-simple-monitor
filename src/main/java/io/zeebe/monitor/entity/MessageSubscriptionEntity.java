@@ -23,7 +23,7 @@ import javax.persistence.Id;
 public class MessageSubscriptionEntity {
 
   @Id
-  @Column(name = "ID_")
+  @Column(name = "ID_", length = 200)
   private String id;
 
   @Column(name = "MESSAGE_NAME_")
