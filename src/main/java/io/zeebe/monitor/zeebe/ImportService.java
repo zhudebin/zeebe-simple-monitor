@@ -1,6 +1,5 @@
 package io.zeebe.monitor.zeebe;
 
-import com.hazelcast.core.HazelcastInstance;
 import io.camunda.zeebe.protocol.Protocol;
 import io.camunda.zeebe.protocol.record.intent.IncidentIntent;
 import io.camunda.zeebe.protocol.record.intent.Intent;
@@ -11,10 +10,8 @@ import io.camunda.zeebe.protocol.record.intent.MessageSubscriptionIntent;
 import io.camunda.zeebe.protocol.record.intent.ProcessInstanceIntent;
 import io.camunda.zeebe.protocol.record.intent.TimerIntent;
 import io.zeebe.exporter.proto.Schema;
-import io.zeebe.hazelcast.connect.java.ZeebeHazelcast;
 import io.zeebe.monitor.entity.ElementInstanceEntity;
 import io.zeebe.monitor.entity.ErrorEntity;
-import io.zeebe.monitor.entity.HazelcastConfig;
 import io.zeebe.monitor.entity.IncidentEntity;
 import io.zeebe.monitor.entity.JobEntity;
 import io.zeebe.monitor.entity.MessageEntity;
@@ -25,7 +22,6 @@ import io.zeebe.monitor.entity.TimerEntity;
 import io.zeebe.monitor.entity.VariableEntity;
 import io.zeebe.monitor.repository.ElementInstanceRepository;
 import io.zeebe.monitor.repository.ErrorRepository;
-import io.zeebe.monitor.repository.HazelcastConfigRepository;
 import io.zeebe.monitor.repository.IncidentRepository;
 import io.zeebe.monitor.repository.JobRepository;
 import io.zeebe.monitor.repository.MessageRepository;
@@ -34,93 +30,45 @@ import io.zeebe.monitor.repository.ProcessInstanceRepository;
 import io.zeebe.monitor.repository.ProcessRepository;
 import io.zeebe.monitor.repository.TimerRepository;
 import io.zeebe.monitor.repository.VariableRepository;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Component;
-
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Component;
 
 @Component
-public class ZeebeImportService {
+public class ImportService {
 
-  @Autowired private ProcessRepository processRepository;
-  @Autowired private ProcessInstanceRepository processInstanceRepository;
-  @Autowired private ElementInstanceRepository elementInstanceRepository;
-  @Autowired private VariableRepository variableRepository;
-  @Autowired private JobRepository jobRepository;
-  @Autowired private IncidentRepository incidentRepository;
-  @Autowired private MessageRepository messageRepository;
-  @Autowired private MessageSubscriptionRepository messageSubscriptionRepository;
-  @Autowired private TimerRepository timerRepository;
-  @Autowired private ErrorRepository errorRepository;
+  private static final Logger LOG = LoggerFactory.getLogger(ImportService.class);
 
-  @Autowired private ZeebeNotificationService notificationService;
+  @Autowired
+  private ProcessRepository processRepository;
+  @Autowired
+  private ProcessInstanceRepository processInstanceRepository;
+  @Autowired
+  private ElementInstanceRepository elementInstanceRepository;
+  @Autowired
+  private VariableRepository variableRepository;
+  @Autowired
+  private JobRepository jobRepository;
+  @Autowired
+  private IncidentRepository incidentRepository;
+  @Autowired
+  private MessageRepository messageRepository;
+  @Autowired
+  private MessageSubscriptionRepository messageSubscriptionRepository;
+  @Autowired
+  private TimerRepository timerRepository;
+  @Autowired
+  private ErrorRepository errorRepository;
 
-  @Autowired private HazelcastConfigRepository hazelcastConfigRepository;
+  @Autowired
+  private ZeebeNotificationService notificationService;
 
-  public ZeebeHazelcast importFrom(final HazelcastInstance hazelcast) {
 
-    final var hazelcastConfig =
-        hazelcastConfigRepository
-            .findById("cfg")
-            .orElseGet(
-                () -> {
-                  final var config = new HazelcastConfig();
-                  config.setId("cfg");
-                  config.setSequence(-1);
-                  return config;
-                });
-
-    final var builder =
-        ZeebeHazelcast.newBuilder(hazelcast)
-            .addProcessListener(
-                record -> ifEvent(record, Schema.ProcessRecord::getMetadata, this::importProcess))
-            .addProcessInstanceListener(
-                record ->
-                    ifEvent(
-                        record,
-                        Schema.ProcessInstanceRecord::getMetadata,
-                        this::importProcessInstance))
-            .addIncidentListener(
-                record -> ifEvent(record, Schema.IncidentRecord::getMetadata, this::importIncident))
-            .addJobListener(
-                record -> ifEvent(record, Schema.JobRecord::getMetadata, this::importJob))
-            .addVariableListener(
-                record -> ifEvent(record, Schema.VariableRecord::getMetadata, this::importVariable))
-            .addTimerListener(
-                record -> ifEvent(record, Schema.TimerRecord::getMetadata, this::importTimer))
-            .addMessageListener(
-                record -> ifEvent(record, Schema.MessageRecord::getMetadata, this::importMessage))
-            .addMessageSubscriptionListener(
-                record ->
-                    ifEvent(
-                        record,
-                        Schema.MessageSubscriptionRecord::getMetadata,
-                        this::importMessageSubscription))
-            .addMessageStartEventSubscriptionListener(
-                record ->
-                    ifEvent(
-                        record,
-                        Schema.MessageStartEventSubscriptionRecord::getMetadata,
-                        this::importMessageStartEventSubscription))
-            .addErrorListener(this::importError)
-            .postProcessListener(
-                sequence -> {
-                  hazelcastConfig.setSequence(sequence);
-                  hazelcastConfigRepository.save(hazelcastConfig);
-                });
-
-    if (hazelcastConfig.getSequence() >= 0) {
-      builder.readFrom(hazelcastConfig.getSequence());
-    } else {
-      builder.readFromHead();
-    }
-
-    return builder.build();
-  }
-
-  private <T> void ifEvent(
+  public <T> void ifEvent(
       final T record,
       final Function<T, Schema.RecordMetadata> extractor,
       final Consumer<T> consumer) {
@@ -134,7 +82,7 @@ public class ZeebeImportService {
     return metadata.getRecordType() == Schema.RecordMetadata.RecordType.EVENT;
   }
 
-  private void importProcess(final Schema.ProcessRecord record) {
+  public void importProcess(final Schema.ProcessRecord record) {
     final int partitionId = record.getMetadata().getPartitionId();
 
     if (partitionId != Protocol.DEPLOYMENT_PARTITION) {
@@ -151,7 +99,7 @@ public class ZeebeImportService {
     processRepository.save(entity);
   }
 
-  private void importProcessInstance(final Schema.ProcessInstanceRecord record) {
+  public void importProcessInstance(final Schema.ProcessInstanceRecord record) {
     if (record.getProcessInstanceKey() == record.getMetadata().getKey()) {
       addOrUpdateProcessInstance(record);
     }
@@ -231,7 +179,7 @@ public class ZeebeImportService {
     }
   }
 
-  private void importIncident(final Schema.IncidentRecord record) {
+  public void importIncident(final Schema.IncidentRecord record) {
 
     final IncidentIntent intent = IncidentIntent.valueOf(record.getMetadata().getIntent());
     final long key = record.getMetadata().getKey();
@@ -264,7 +212,7 @@ public class ZeebeImportService {
     }
   }
 
-  private void importJob(final Schema.JobRecord record) {
+  public void importJob(final Schema.JobRecord record) {
 
     final JobIntent intent = JobIntent.valueOf(record.getMetadata().getIntent());
     final long key = record.getMetadata().getKey();
@@ -290,7 +238,7 @@ public class ZeebeImportService {
     jobRepository.save(entity);
   }
 
-  private void importMessage(final Schema.MessageRecord record) {
+  public void importMessage(final Schema.MessageRecord record) {
 
     final MessageIntent intent = MessageIntent.valueOf(record.getMetadata().getIntent());
     final long key = record.getMetadata().getKey();
@@ -315,7 +263,7 @@ public class ZeebeImportService {
     messageRepository.save(entity);
   }
 
-  private void importMessageSubscription(final Schema.MessageSubscriptionRecord record) {
+  public void importMessageSubscription(final Schema.MessageSubscriptionRecord record) {
 
     final MessageSubscriptionIntent intent =
         MessageSubscriptionIntent.valueOf(record.getMetadata().getIntent());
@@ -342,7 +290,7 @@ public class ZeebeImportService {
     messageSubscriptionRepository.save(entity);
   }
 
-  private void importMessageStartEventSubscription(
+  public void importMessageStartEventSubscription(
       final Schema.MessageStartEventSubscriptionRecord record) {
 
     final MessageStartEventSubscriptionIntent intent =
@@ -369,7 +317,7 @@ public class ZeebeImportService {
     messageSubscriptionRepository.save(entity);
   }
 
-  private void importTimer(final Schema.TimerRecord record) {
+  public void importTimer(final Schema.TimerRecord record) {
 
     final TimerIntent intent = TimerIntent.valueOf(record.getMetadata().getIntent());
     final long key = record.getMetadata().getKey();
@@ -400,7 +348,7 @@ public class ZeebeImportService {
     timerRepository.save(entity);
   }
 
-  private void importVariable(final Schema.VariableRecord record) {
+  public void importVariable(final Schema.VariableRecord record) {
 
     final long position = record.getMetadata().getPosition();
     if (!variableRepository.existsById(position)) {
@@ -417,7 +365,7 @@ public class ZeebeImportService {
     }
   }
 
-  private void importError(final Schema.ErrorRecord record) {
+  public void importError(final Schema.ErrorRecord record) {
 
     final var metadata = record.getMetadata();
     final var position = metadata.getPosition();

@@ -9,6 +9,19 @@ zeebe:
       hazelcast:
         connection: localhost:5701
         connectionTimeout: PT30S
+      kafka:
+        consumer:
+          servers: "localhost:9092"
+          groupId: "test_group_1"
+          topicPattern: "^zeebe.*$"
+          config: |
+            linger.ms=5
+            buffer.memory=8388608
+            batch.size=32768
+            max.block.ms=5000
+
+  # zeebe exporter 类型， kafka/hazelcast
+  exporter: "kafka"
 
 spring:
 
