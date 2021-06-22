@@ -31,13 +31,13 @@
 
                 {{#jobKey}}
                 <button type="button" class="btn btn-primary" data-dismiss="modal"
-                        onclick="resolveJobIncident({{key}}, {{jobKey}})">Resolve
+                        onclick="resolveJobIncident('{{key}}', '{{jobKey}}')">Resolve
                 </button>
                 {{/jobKey}}
 
                 {{^jobKey}}
                 <button type="button" class="btn btn-primary" data-dismiss="modal"
-                        onclick="resolveProcessInstanceIncident({{key}})">Resolve
+                        onclick="resolveProcessInstanceIncident('{{key}}')">Resolve
                 </button>
                 {{/jobKey}}
 
