@@ -21,14 +21,13 @@ zeebe:
 spring:
 
   datasource:
-    url: jdbc:mysql://dev-alarm:17878/zeebe1?useUnicode=true&characterEncoding=UTF-8&allowMultiQueries=true&zeroDateTimeBehavior=convertToNull
-    username: root
-    password: 111111
-    driverClassName: com.mysql.jdbc.Driver
-    initialization-mode: always
+    url: jdbc:h2:mem:zeebe-monitor;DB_CLOSE_DELAY=-1
+    username: sa
+    password:
+    driverClassName: org.h2.Driver
 
   jpa:
-    database-platform: org.hibernate.dialect.MySQL5Dialect
+    database-platform: org.hibernate.dialect.H2Dialect
     hibernate:
       ddl-auto: update
 
