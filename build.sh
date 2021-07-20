@@ -13,7 +13,7 @@ push() {
   docker push ccr.ccs.tencentyun.com/sre_pcg/zeebe-simple-monitor:${version}
 }
 
-version=2.0.1
+version=2.1.0
 
 build
 
